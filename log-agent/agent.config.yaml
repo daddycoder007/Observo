@@ -1,0 +1,8 @@
+server_id: "my-server-1"
+kafka:
+  brokers:
+    - "localhost:9092"
+  topic_prefix: "testing-logs"
+log_files:
+  - path: ./logs/output.log
+    tag: "output"
