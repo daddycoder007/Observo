@@ -9,6 +9,10 @@
   "license": "MIT",
   "description": "📦 A lightweight Node.js log tailer that pushes logs to Kafka",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/daddycoder007/Observo.git"
+  },
   "bin": {
     "log-agent": "./bin/cli.js"
   },
