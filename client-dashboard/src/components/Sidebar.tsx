@@ -1,6 +1,6 @@
 import React from 'react';
 import {
-  Drawer,
+  Drawer as MuiDrawer,
   List,
   ListItem,
   ListItemButton,
@@ -8,115 +8,160 @@ import {
   ListItemText,
   Box,
   Typography,
-  Divider,
+  IconButton,
+  Tooltip,
+  styled,
+  Theme,
+  CSSObject,
 } from '@mui/material';
 import {
   Dashboard as DashboardIcon,
-  List as ListIcon,
-  Analytics as AnalyticsIcon,
-  Settings as SettingsIcon,
+  ReceiptLong as LogsIcon,
+  ChevronLeft,
+  ChevronRight,
+  QueryStats,
+  Brightness4,
+  Brightness7,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 
-const drawerWidth = 280;
+const drawerWidth = 240;
+
+const openedMixin = (theme: Theme): CSSObject => ({
+  width: drawerWidth,
+  transition: theme.transitions.create('width', {
+    easing: theme.transitions.easing.sharp,
+    duration: theme.transitions.duration.enteringScreen,
+  }),
+  overflowX: 'hidden',
+  backgroundColor: theme.palette.background.paper,
+  borderRight: `1px solid ${theme.palette.divider}`,
+});
+
+const closedMixin = (theme: Theme): CSSObject => ({
+  transition: theme.transitions.create('width', {
+    easing: theme.transitions.easing.sharp,
+    duration: theme.transitions.duration.leavingScreen,
+  }),
+  overflowX: 'hidden',
+  backgroundColor: theme.palette.background.paper,
+  borderRight: `1px solid ${theme.palette.divider}`,
+  width: `calc(${theme.spacing(7)} + 1px)`,
+  [theme.breakpoints.up('sm')]: {
+    width: `calc(${theme.spacing(8)} + 1px)`,
+  },
+});
+
+const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' })(
+  ({ theme, open }) => ({
+    width: drawerWidth,
+    flexShrink: 0,
+    whiteSpace: 'nowrap',
+    boxSizing: 'border-box',
+    ...(open && {
+      ...openedMixin(theme),
+      '& .MuiDrawer-paper': openedMixin(theme),
+    }),
+    ...(!open && {
+      ...closedMixin(theme),
+      '& .MuiDrawer-paper': closedMixin(theme),
+    }),
+  }),
+);
 
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
-  { text: 'Logs', icon: <ListIcon />, path: '/logs' },
-  { text: 'Analytics', icon: <AnalyticsIcon />, path: '/analytics' },
-  { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+  { text: 'Logs', icon: <LogsIcon />, path: '/logs' },
 ];
 
-const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isOpen: boolean;
+  toggleSidebar: () => void;
+  mode: 'light' | 'dark';
+  toggleColorMode: () => void;
+}
+
+const Sidebar: React.FC<SidebarProps> = ({ isOpen, toggleSidebar, mode, toggleColorMode }) => {
   const navigate = useNavigate();
   const location = useLocation();
 
   return (
-    <Drawer
-      variant="permanent"
-      sx={{
-        width: drawerWidth,
-        flexShrink: 0,
-        '& .MuiDrawer-paper': {
-          width: drawerWidth,
-          boxSizing: 'border-box',
-          backgroundColor: '#0f0f0f',
-          borderRight: '1px solid #333333',
-        },
-      }}
-    >
-      <Box sx={{ p: 3 }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
-          <Box
-            sx={{
-              width: 40,
-              height: 40,
-              borderRadius: 2,
-              background: 'linear-gradient(135deg, #00d4ff 0%, #ff6b35 100%)',
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              mr: 2,
-            }}
-          >
-            <Typography variant="h6" sx={{ color: 'white', fontWeight: 'bold' }}>
-              O
-            </Typography>
-          </Box>
-          <Typography variant="h5" sx={{ fontWeight: 'bold', color: 'white' }}>
+    <Drawer variant="permanent" open={isOpen}>
+      <Box sx={{ display: 'flex', alignItems: 'center', justifyContent: 'center', p: 2, ...(!isOpen && { display: 'none' }) }}>
+        <QueryStats sx={{mr: 1, color: 'primary.main'}}/>
+        <Typography variant="h6" sx={{ fontWeight: 'bold' }}>
             Observo
-          </Typography>
-        </Box>
-        <Typography variant="body2" sx={{ color: 'text.secondary', mb: 3 }}>
-          Log Observability Dashboard
         </Typography>
       </Box>
-
-      <Divider sx={{ borderColor: '#333333' }} />
-
       <List sx={{ pt: 2 }}>
         {menuItems.map((item) => (
-          <ListItem key={item.text} disablePadding sx={{ mb: 1 }}>
-            <ListItemButton
-              onClick={() => navigate(item.path)}
-              sx={{
-                mx: 2,
-                borderRadius: 2,
-                backgroundColor: location.pathname === item.path ? 'rgba(0, 212, 255, 0.1)' : 'transparent',
-                border: location.pathname === item.path ? '1px solid rgba(0, 212, 255, 0.3)' : '1px solid transparent',
-                '&:hover': {
-                  backgroundColor: 'rgba(0, 212, 255, 0.05)',
-                  border: '1px solid rgba(0, 212, 255, 0.2)',
-                },
-              }}
-            >
-              <ListItemIcon
-                sx={{
-                  color: location.pathname === item.path ? 'primary.main' : 'text.secondary',
-                  minWidth: 40,
-                }}
-              >
-                {item.icon}
-              </ListItemIcon>
-              <ListItemText
-                primary={item.text}
-                sx={{
-                  '& .MuiListItemText-primary': {
-                    color: location.pathname === item.path ? 'primary.main' : 'text.primary',
-                    fontWeight: location.pathname === item.path ? 600 : 400,
-                  },
-                }}
-              />
-            </ListItemButton>
+          <ListItem key={item.text} disablePadding sx={{ display: 'block' }}>
+            <Tooltip title={isOpen ? '' : item.text} placement="right">
+                <ListItemButton
+                    onClick={() => navigate(item.path)}
+                    sx={{
+                        minHeight: 48,
+                        justifyContent: isOpen ? 'initial' : 'center',
+                        px: 2.5,
+                        mx: 1.5,
+                        my: 0.5,
+                        borderRadius: 1,
+                        backgroundColor: location.pathname === item.path ? 'primary.main' : 'transparent',
+                        color: location.pathname === item.path ? 'white' : 'text.secondary',
+                        '&:hover': {
+                            backgroundColor: location.pathname !== item.path ? 'action.hover' : 'primary.dark',
+                        },
+                    }}
+                    >
+                    <ListItemIcon
+                        sx={{
+                        minWidth: 0,
+                        mr: isOpen ? 3 : 'auto',
+                        justifyContent: 'center',
+                        color: 'inherit',
+                        }}
+                    >
+                        {item.icon}
+                    </ListItemIcon>
+                    <ListItemText primary={item.text} sx={{ opacity: isOpen ? 1 : 0 }} />
+                </ListItemButton>
+            </Tooltip>
           </ListItem>
         ))}
       </List>
-
-      <Box sx={{ mt: 'auto', p: 3 }}>
-        <Divider sx={{ borderColor: '#333333', mb: 2 }} />
-        <Typography variant="caption" sx={{ color: 'text.secondary' }}>
-          Version 1.0.0
-        </Typography>
+      <Box sx={{ mt: 'auto' }}>
+         <Tooltip title={`Switch to ${mode === 'dark' ? 'light' : 'dark'} mode`} placement="right">
+            <ListItemButton
+                onClick={toggleColorMode}
+                sx={{
+                    minHeight: 48,
+                    justifyContent: 'center',
+                    px: 2.5,
+                    m: 1.5,
+                    borderRadius: 1,
+                }}
+            >
+                <ListItemIcon sx={{ minWidth: 0, justifyContent: 'center', color: 'text.secondary' }}>
+                    {mode === 'dark' ? <Brightness7 /> : <Brightness4 />}
+                </ListItemIcon>
+            </ListItemButton>
+        </Tooltip>
+         <Tooltip title={isOpen ? 'Collapse' : 'Expand'} placement="right">
+            <ListItemButton
+                onClick={toggleSidebar}
+                sx={{
+                    minHeight: 48,
+                    justifyContent: 'center',
+                    px: 2.5,
+                    m: 1.5,
+                    borderRadius: 1,
+                }}
+            >
+                <ListItemIcon sx={{ minWidth: 0, justifyContent: 'center', color: 'text.secondary' }}>
+                    {isOpen ? <ChevronLeft /> : <ChevronRight />}
+                </ListItemIcon>
+            </ListItemButton>
+        </Tooltip>
       </Box>
     </Drawer>
   );

@@ -1,8 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   Box,
-  Card,
-  CardContent,
   Typography,
   TextField,
   FormControl,
@@ -11,551 +9,300 @@ import {
   MenuItem,
   Button,
   Chip,
-  Table,
-  TableBody,
-  TableCell,
-  TableContainer,
-  TableHead,
-  TableRow,
   Paper,
   CircularProgress,
   Alert,
   Pagination,
   IconButton,
   Tooltip,
-  Dialog,
-  DialogTitle,
-  DialogContent,
-  DialogActions,
-  Switch,
-  FormControlLabel,
-  Snackbar,
+  Collapse,
+  Divider,
 } from '@mui/material';
 import {
   Search,
-  FilterList,
   Refresh,
-  Visibility,
   Error,
   Warning,
   Info,
   BugReport,
-  RadioButtonChecked,
-  Pause,
-  Notifications,
+  ExpandMore,
 } from '@mui/icons-material';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns';
 import { apiService, LogEntry, LogsResponse, wsService } from '../services/api';
+import { BarChart } from '@mui/x-charts/BarChart';
+
+const LogLevelChip = ({ level }: { level: string }) => {
+    const style = {
+        color: '#fff',
+        fontWeight: 'bold',
+        fontSize: '0.75rem',
+        padding: '0 8px',
+        height: 24,
+        borderRadius: '6px',
+        textTransform: 'uppercase'
+    };
+    switch (level.toLowerCase()) {
+        case 'error':
+            return <Chip icon={<Error sx={{ fontSize: 16, ml: 1 }}/>} label="Error" sx={{ ...style, backgroundColor: 'error.main' }} />;
+        case 'warn':
+            return <Chip icon={<Warning sx={{ fontSize: 16, ml: 1 }}/>} label="Warn" sx={{ ...style, backgroundColor: 'warning.main' }} />;
+        case 'debug':
+            return <Chip icon={<BugReport sx={{ fontSize: 16, ml: 1 }}/>} label="Debug" sx={{ ...style, backgroundColor: 'secondary.dark' }} />;
+        case 'info':
+            return <Chip icon={<Info sx={{ fontSize: 16, ml: 1 }}/>} label="Info" sx={{ ...style, backgroundColor: 'success.main' }} />;
+        default:
+            return <Chip label={level} sx={{ ...style, backgroundColor: 'text.secondary' }} />;
+    }
+};
+
+const LogEntryItem = ({ log }: { log: LogEntry }) => {
+  const [expanded, setExpanded] = useState(false);
+
+  return (
+    <Paper variant="outlined" sx={{ mb: 1, p: 1.5, '&:hover': { borderColor: 'primary.main' } }} >
+        <Box display="flex" alignItems="center" gap={2} onClick={() => setExpanded(!expanded)} sx={{cursor: 'pointer'}}>
+            <Box sx={{ width: { xs: '100%', sm: '20%' } }}>
+                <Typography variant="body2" color="text.secondary" sx={{fontSize: '18px'}}>{format(parseISO(log.timestamp), 'MMM dd, HH:mm:ss.SSS')}</Typography>
+            </Box>
+            <Box>
+                <LogLevelChip level={log.level} />
+            </Box>
+            <Box sx={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                <Typography variant="body2" component="span" sx={{ fontWeight: 500, mr: 1, whiteSpace: 'nowrap', fontSize: '18px' }}>{log.service}</Typography>
+                <Typography
+                    variant="body2"
+                    component="span"
+                    color="text.secondary"
+                    sx={{
+                        fontFamily: "'Fira Code', 'Menlo', 'monospace'",
+                        fontSize: '18px',
+                        ...(expanded ? {
+                            whiteSpace: 'normal',
+                            wordBreak: 'break-all',
+                        } : {
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                        })
+                    }}
+                >
+                    {log.message}
+                </Typography>
+            </Box>
+            <Box>
+                <Tooltip title={expanded ? "Show less" : "Show more"}>
+                    <IconButton size="small">
+                        <ExpandMore sx={{ transform: expanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s' }} />
+                    </IconButton>
+                </Tooltip>
+            </Box>
+        </Box>
+        <Collapse in={expanded}>
+            <Divider sx={{ my: 1.5 }}/>
+            <Box sx={{ p: 2, backgroundColor: 'background.default', borderRadius: 1 }}>
+                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>Full Log Details</Typography>
+                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#E0E0E0', fontFamily: "'Fira Code', 'Menlo', 'monospace'" }}>
+                    {JSON.stringify(log, null, 2)}
+                </pre>
+            </Box>
+        </Collapse>
+    </Paper>
+  );
+}
 
 const LogsViewer: React.FC = () => {
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [pagination, setPagination] = useState({
-    page: 1,
-    limit: 50,
-    total: 0,
-    pages: 0,
+  const [pagination, setPagination] = useState({ page: 1, limit: 50, total: 0, pages: 0 });
+  const [filters, setFilters] = useState({ 
+      level: '', 
+      service: '', 
+      search: '',
+      startTime: '',
+      endTime: '',
   });
-  const [filters, setFilters] = useState({
-    level: '',
-    service: '',
-    host: '',
-    search: '',
-    startDate: '',
-    endDate: '',
-  });
-  const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
-  const [detailDialogOpen, setDetailDialogOpen] = useState(false);
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [lastUpdate, setLastUpdate] = useState<Date>(new Date());
-  const [notification, setNotification] = useState<{ message: string; type: 'info' | 'success' | 'warning' | 'error' } | null>(null);
-  const [showNotification, setShowNotification] = useState(false);
-  const [wsConnected, setWsConnected] = useState(false);
-  const previousLogCount = useRef(0);
+  const [logStats, setLogStats] = useState<any>(null);
+  const [services, setServices] = useState<string[]>([]);
 
-  useEffect(() => {
-    fetchLogs();
-    
-    // Connect to WebSocket for real-time updates
-    wsService.connect();
-    
-    wsService.on('connected', () => {
-      console.log('WebSocket connected to logs viewer');
-      setWsConnected(true);
-    });
-
-    wsService.on('disconnected', () => {
-      console.log('WebSocket disconnected from logs viewer');
-      setWsConnected(false);
-    });
-
-    wsService.on('newLog', (data: any) => {
-      console.log('New log received via WebSocket:', data);
-      // Only refresh if we're on the first page and no filters are applied
-      if (pagination.page === 1 && !hasActiveFilters()) {
-        fetchLogs();
-      }
-      
-      // Show notification for new logs
-      setNotification({
-        message: `New ${data.data.level} log from ${data.data.service}`,
-        type: 'success'
-      });
-      setShowNotification(true);
-    });
-    
-    if (autoRefresh) {
-      const interval = setInterval(fetchLogs, 3000); // Refresh every 3 seconds
-      return () => clearInterval(interval);
-    }
-  }, [pagination.page, pagination.limit, filters, autoRefresh]);
-
-  const hasActiveFilters = () => {
-    return Object.values(filters).some(value => value !== '');
-  };
-
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async (showLoading = false) => {
     try {
-      setLoading(false); // Don't show loading on subsequent updates
-      const response: LogsResponse = await apiService.getLogs({
-        page: pagination.page,
-        limit: pagination.limit,
-        ...filters,
-      });
-      
-      // Check for new logs
-      if (previousLogCount.current > 0 && response.logs.length > previousLogCount.current) {
-        const newLogsCount = response.logs.length - previousLogCount.current;
-        setNotification({
-          message: `${newLogsCount} new log${newLogsCount > 1 ? 's' : ''} received`,
-          type: 'success'
-        });
-        setShowNotification(true);
-      }
-      
+      if (showLoading) setLoading(true);
+      const response: LogsResponse = await apiService.getLogs({ page: pagination.page, limit: pagination.limit, ...filters });
       setLogs(response.logs);
       setPagination(response.pagination);
-      setLastUpdate(new Date());
-      previousLogCount.current = response.logs.length;
       setError(null);
     } catch (err) {
       setError('Failed to fetch logs');
-      console.error('Error fetching logs:', err);
+    } finally {
+        if (showLoading) setLoading(false);
     }
-  };
+  }, [pagination.page, pagination.limit, filters]);
+  
+  const fetchStats = useCallback(async () => {
+    try {
+      const stats = await apiService.getLogStats();
+      setLogStats(stats);
+      if (stats.logsByService) {
+        setServices(stats.logsByService.map((s: any) => s._id));
+      }
+    } catch (err) {
+      console.error("Failed to fetch log stats", err);
+    }
+  }, []);
+
+  useEffect(() => {
+    fetchLogs(true);
+    fetchStats();
+    
+    wsService.connect();
+    wsService.on('message', (data: any) => {
+      if (data.type === 'newLog') {
+        console.log('New log received on LogsViewer, refreshing...');
+        fetchLogs(false);
+        fetchStats();
+      }
+    });
+
+    return () => {
+      wsService.disconnect();
+    };
+  }, [fetchLogs, fetchStats]);
 
   const handleFilterChange = (field: string, value: string) => {
     setFilters(prev => ({ ...prev, [field]: value }));
-    setPagination(prev => ({ ...prev, page: 1 })); // Reset to first page
+    setPagination(prev => ({ ...prev, page: 1 }));
   };
 
   const handlePageChange = (event: React.ChangeEvent<unknown>, value: number) => {
     setPagination(prev => ({ ...prev, page: value }));
   };
-
-  const clearFilters = () => {
-    setFilters({
-      level: '',
-      service: '',
-      host: '',
-      search: '',
-      startDate: '',
-      endDate: '',
-    });
-    setPagination(prev => ({ ...prev, page: 1 }));
-  };
-
-  const handleManualRefresh = () => {
-    fetchLogs();
-  };
-
-  const handleCloseNotification = () => {
-    setShowNotification(false);
-  };
-
-  const getLevelColor = (level: string) => {
-    switch (level.toLowerCase()) {
-      case 'error':
-        return '#ff4757';
-      case 'warn':
-        return '#ffd700';
-      case 'debug':
-        return '#00d4ff';
-      case 'info':
-        return '#2ed573';
-      default:
-        return '#b0b0b0';
-    }
-  };
-
-  const getLevelIcon = (level: string) => {
-    switch (level.toLowerCase()) {
-      case 'error':
-        return <Error />;
-      case 'warn':
-        return <Warning />;
-      case 'debug':
-        return <BugReport />;
-      case 'info':
-        return <Info />;
-      default:
-        return <Info />;
-    }
-  };
-
-  const formatTimestamp = (timestamp: string) => {
-    try {
-      return format(new Date(timestamp), 'MMM dd, yyyy HH:mm:ss');
-    } catch {
-      return timestamp;
-    }
-  };
-
-  const truncateMessage = (message: string, maxLength: number = 100) => {
-    if (message.length <= maxLength) return message;
-    return message.substring(0, maxLength) + '...';
-  };
+  
+  const logsPerHourData = logStats?.logsPerHour.map((item: any) => item.count) || [];
+  const logsPerHourLabels = logStats?.logsPerHour.map((item: any) => `${item._id.hour}:00`) || [];
 
   return (
-    <Box>
-      <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-        <Typography variant="h4" sx={{ fontWeight: 'bold' }}>
-          Logs Viewer
+    <Box sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <Typography variant="h4" sx={{ fontWeight: 'bold', mb: 2 }}>
+          Logs Explorer
         </Typography>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            {wsConnected ? (
-              autoRefresh ? (
-                <RadioButtonChecked 
-                  sx={{ 
-                    color: '#00d4ff', 
-                    fontSize: 12,
-                    animation: 'pulse 2s infinite',
-                    '@keyframes pulse': {
-                      '0%': { opacity: 1 },
-                      '50%': { opacity: 0.5 },
-                      '100%': { opacity: 1 },
-                    },
-                  }} 
+
+        <Paper variant="outlined" sx={{ p: 2, mb: 2 }}>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flexDirection: { xs: 'column', sm: 'row' } }}>
+                <Box sx={{ width: '100%', flex: { sm: 4 } }}>
+                    <TextField
+                        fullWidth
+                        variant="outlined"
+                        placeholder="Search logs by message, service, or host..."
+                        value={filters.search}
+                        onChange={(e) => handleFilterChange('search', e.target.value)}
+                        InputProps={{
+                            startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />
+                        }}
+                    />
+                </Box>
+                <Box sx={{ width: '100%', flex: { sm: 1.5 } }}>
+                     <FormControl fullWidth>
+                        <InputLabel>Level</InputLabel>
+                        <Select
+                            value={filters.level}
+                            label="Level"
+                            onChange={(e) => handleFilterChange('level', e.target.value)}
+                        >
+                            <MenuItem value="">Any</MenuItem>
+                            <MenuItem value="info">Info</MenuItem>
+                            <MenuItem value="warn">Warn</MenuItem>
+                            <MenuItem value="error">Error</MenuItem>
+                            <MenuItem value="debug">Debug</MenuItem>
+                        </Select>
+                    </FormControl>
+                </Box>
+                <Box sx={{ width: '100%', flex: { sm: 1.5 } }}>
+                     <FormControl fullWidth>
+                        <InputLabel>Service</InputLabel>
+                        <Select
+                            value={filters.service}
+                            label="Service"
+                            onChange={(e) => handleFilterChange('service', e.target.value)}
+                        >
+                            <MenuItem value="">Any</MenuItem>
+                            {services.map(service => (
+                                <MenuItem key={service} value={service}>{service}</MenuItem>
+                            ))}
+                        </Select>
+                    </FormControl>
+                </Box>
+                 <Box sx={{ width: '100%', flex: { sm: 2.5 } }}>
+                    <TextField
+                        fullWidth
+                        label="Start Time"
+                        type="datetime-local"
+                        value={filters.startTime}
+                        onChange={(e) => handleFilterChange('startTime', e.target.value)}
+                        InputLabelProps={{
+                            shrink: true,
+                        }}
+                    />
+                </Box>
+                 <Box sx={{ width: '100%', flex: { sm: 2.5 } }}>
+                    <TextField
+                        fullWidth
+                        label="End Time"
+                        type="datetime-local"
+                        value={filters.endTime}
+                        onChange={(e) => handleFilterChange('endTime', e.target.value)}
+                        InputLabelProps={{
+                            shrink: true,
+                        }}
+                    />
+                </Box>
+                <Box sx={{ width: '100%', flex: { sm: 1 } }}>
+                    <Button fullWidth variant="contained" onClick={() => fetchLogs(true)} startIcon={<Refresh/>} sx={{height: '56px'}}>Refresh</Button>
+                </Box>
+            </Box>
+        </Paper>
+
+        {logStats && (
+            <Paper variant="outlined" sx={{ p: 2, mb: 2, height: 200 }}>
+                 <Typography variant="h6" sx={{mb: 1}}>Logs Over Time</Typography>
+                 <BarChart
+                    series={[{ data: logsPerHourData, color: '#6C63FF' }]}
+                    xAxis={[{ data: logsPerHourLabels, scaleType: 'band' }]}
+                    margin={{ top: 10, right: 10, bottom: 20, left: 30 }}
+                    grid={{ horizontal: true }}
+                    sx={{
+                        '& .MuiChartsAxis-tickLabel': {
+                            fill: '#BDBDBD'
+                        },
+                        '& .MuiChartsAxis-line': {
+                            stroke: '#BDBDBD'
+                        },
+                        '& .MuiChartsGrid-line': {
+                            stroke: 'rgba(255, 255, 255, 0.12)'
+                        }
+                    }}
                 />
-              ) : (
-                <Pause sx={{ color: '#666', fontSize: 12 }} />
-              )
-            ) : (
-              <RadioButtonChecked sx={{ color: '#ff4757', fontSize: 12 }} />
+            </Paper>
+        )}
+
+        <Box sx={{ flexGrow: 1, overflow: 'auto', pr: 1 }}>
+            {loading ? (
+                 <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}><CircularProgress /></Box>
+            ): error ? (
+                <Alert severity="error">{error}</Alert>
+            ): (
+                logs.map(log => <LogEntryItem key={log._id} log={log} />)
             )}
-            <FormControlLabel
-              control={
-                <Switch
-                  checked={autoRefresh}
-                  onChange={(e) => setAutoRefresh(e.target.checked)}
-                  size="small"
-                />
-              }
-              label={wsConnected ? (autoRefresh ? 'Live' : 'Paused') : 'Disconnected'}
-              sx={{ '& .MuiFormControlLabel-label': { fontSize: '0.875rem' } }}
-            />
-          </Box>
-          <Tooltip title="Manual Refresh">
-            <IconButton onClick={handleManualRefresh} size="small">
-              <Refresh />
-            </IconButton>
-          </Tooltip>
-          <Typography variant="caption" color="text.secondary">
-            Last update: {format(lastUpdate, 'HH:mm:ss')}
-          </Typography>
         </Box>
-      </Box>
-
-      {error && (
-        <Alert severity="error" sx={{ mb: 3 }}>
-          {error}
-        </Alert>
-      )}
-
-      {/* Filters */}
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Typography variant="h6" sx={{ mb: 2, display: 'flex', alignItems: 'center' }}>
-            <FilterList sx={{ mr: 1 }} />
-            Filters
-          </Typography>
-          <Box sx={{ display: 'flex', flexWrap: 'wrap', gap: 2 }}>
-            <TextField
-              label="Search"
-              value={filters.search}
-              onChange={(e) => handleFilterChange('search', e.target.value)}
-              placeholder="Search in messages..."
-              size="small"
-              sx={{ minWidth: 200 }}
-              InputProps={{
-                startAdornment: <Search sx={{ mr: 1, color: 'text.secondary' }} />,
-              }}
+        
+        <Box sx={{ display: 'flex', justifyContent: 'center', pt: 2 }}>
+            <Pagination
+                count={pagination.pages}
+                page={pagination.page}
+                onChange={handlePageChange}
+                color="primary"
             />
-            <FormControl size="small" sx={{ minWidth: 120 }}>
-              <InputLabel>Level</InputLabel>
-              <Select
-                value={filters.level}
-                label="Level"
-                onChange={(e) => handleFilterChange('level', e.target.value)}
-              >
-                <MenuItem value="">All</MenuItem>
-                <MenuItem value="error">Error</MenuItem>
-                <MenuItem value="warn">Warning</MenuItem>
-                <MenuItem value="info">Info</MenuItem>
-                <MenuItem value="debug">Debug</MenuItem>
-              </Select>
-            </FormControl>
-            <TextField
-              label="Service"
-              value={filters.service}
-              onChange={(e) => handleFilterChange('service', e.target.value)}
-              placeholder="Filter by service..."
-              size="small"
-              sx={{ minWidth: 150 }}
-            />
-            <TextField
-              label="Host"
-              value={filters.host}
-              onChange={(e) => handleFilterChange('host', e.target.value)}
-              placeholder="Filter by host..."
-              size="small"
-              sx={{ minWidth: 150 }}
-            />
-            <TextField
-              label="Start Date"
-              type="datetime-local"
-              value={filters.startDate}
-              onChange={(e) => handleFilterChange('startDate', e.target.value)}
-              size="small"
-              InputLabelProps={{ shrink: true }}
-            />
-            <TextField
-              label="End Date"
-              type="datetime-local"
-              value={filters.endDate}
-              onChange={(e) => handleFilterChange('endDate', e.target.value)}
-              size="small"
-              InputLabelProps={{ shrink: true }}
-            />
-            <Button variant="outlined" onClick={clearFilters}>
-              Clear Filters
-            </Button>
-          </Box>
-        </CardContent>
-      </Card>
-
-      {/* Logs Table */}
-      <Card>
-        <CardContent>
-          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-            <Typography variant="h6">
-              Logs ({pagination.total.toLocaleString()} total)
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Page {pagination.page} of {pagination.pages}
-            </Typography>
-          </Box>
-
-          {loading ? (
-            <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
-              <CircularProgress />
-            </Box>
-          ) : (
-            <>
-              <TableContainer component={Paper} sx={{ backgroundColor: 'transparent' }}>
-                <Table>
-                  <TableHead>
-                    <TableRow>
-                      <TableCell>Timestamp</TableCell>
-                      <TableCell>Level</TableCell>
-                      <TableCell>Service</TableCell>
-                      <TableCell>Message</TableCell>
-                      <TableCell>Host</TableCell>
-                      <TableCell>Actions</TableCell>
-                    </TableRow>
-                  </TableHead>
-                  <TableBody>
-                    {logs.map((log) => (
-                      <TableRow key={log._id} hover>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {formatTimestamp(log.timestamp)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Chip
-                            icon={getLevelIcon(log.level)}
-                            label={log.level.toUpperCase()}
-                            size="small"
-                            sx={{
-                              backgroundColor: getLevelColor(log.level),
-                              color: 'white',
-                              fontWeight: 'bold',
-                            }}
-                          />
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" sx={{ fontWeight: 500 }}>
-                            {log.service}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2">
-                            {truncateMessage(log.message)}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Typography variant="body2" color="text.secondary">
-                            {log.metadata.host}
-                          </Typography>
-                        </TableCell>
-                        <TableCell>
-                          <Tooltip title="View Details">
-                            <IconButton
-                              size="small"
-                              onClick={() => {
-                                setSelectedLog(log);
-                                setDetailDialogOpen(true);
-                              }}
-                            >
-                              <Visibility />
-                            </IconButton>
-                          </Tooltip>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </TableContainer>
-
-              {/* Pagination */}
-              <Box sx={{ display: 'flex', justifyContent: 'center', mt: 3 }}>
-                <Pagination
-                  count={pagination.pages}
-                  page={pagination.page}
-                  onChange={handlePageChange}
-                  color="primary"
-                  size="large"
-                />
-              </Box>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Log Detail Dialog */}
-      <Dialog
-        open={detailDialogOpen}
-        onClose={() => setDetailDialogOpen(false)}
-        maxWidth="md"
-        fullWidth
-      >
-        <DialogTitle>
-          Log Details
-          {selectedLog && (
-            <Chip
-              icon={getLevelIcon(selectedLog.level)}
-              label={selectedLog.level.toUpperCase()}
-              size="small"
-              sx={{
-                backgroundColor: getLevelColor(selectedLog.level),
-                color: 'white',
-                fontWeight: 'bold',
-                ml: 2,
-              }}
-            />
-          )}
-        </DialogTitle>
-        <DialogContent>
-          {selectedLog && (
-            <Box sx={{ mt: 2 }}>
-              <Typography variant="h6" sx={{ mb: 2 }}>
-                Message
-              </Typography>
-              <Paper sx={{ p: 2, mb: 3, backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
-                <Typography variant="body1" sx={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap' }}>
-                  {selectedLog.message}
-                </Typography>
-              </Paper>
-
-              <Box sx={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 3 }}>
-                <Box>
-                  <Typography variant="h6" sx={{ mb: 1 }}>
-                    Basic Information
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Typography variant="body2">
-                      <strong>Timestamp:</strong> {formatTimestamp(selectedLog.timestamp)}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Service:</strong> {selectedLog.service}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Tag:</strong> {selectedLog.tag}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Host:</strong> {selectedLog.metadata.host}
-                    </Typography>
-                  </Box>
-                </Box>
-
-                <Box>
-                  <Typography variant="h6" sx={{ mb: 1 }}>
-                    Kafka Metadata
-                  </Typography>
-                  <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
-                    <Typography variant="body2">
-                      <strong>Topic:</strong> {selectedLog.kafkaMetadata.topic}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Partition:</strong> {selectedLog.kafkaMetadata.partition || 'N/A'}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Offset:</strong> {selectedLog.kafkaMetadata.offset}
-                    </Typography>
-                    <Typography variant="body2">
-                      <strong>Received:</strong> {formatTimestamp(selectedLog.kafkaMetadata.receivedAt)}
-                    </Typography>
-                  </Box>
-                </Box>
-              </Box>
-
-              <Typography variant="h6" sx={{ mb: 1, mt: 3 }}>
-                Raw Data
-              </Typography>
-              <Paper sx={{ p: 2, backgroundColor: 'rgba(255, 255, 255, 0.02)' }}>
-                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
-                  {JSON.stringify(selectedLog.raw, null, 2)}
-                </Typography>
-              </Paper>
-            </Box>
-          )}
-        </DialogContent>
-        <DialogActions>
-          <Button onClick={() => setDetailDialogOpen(false)}>Close</Button>
-        </DialogActions>
-      </Dialog>
-
-      {/* Real-time Notification */}
-      <Snackbar
-        open={showNotification}
-        autoHideDuration={3000}
-        onClose={handleCloseNotification}
-        anchorOrigin={{ vertical: 'top', horizontal: 'right' }}
-      >
-        <Alert 
-          onClose={handleCloseNotification} 
-          severity={notification?.type || 'info'}
-          sx={{ width: '100%' }}
-        >
-          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-            <Notifications sx={{ fontSize: 16 }} />
-            {notification?.message}
-          </Box>
-        </Alert>
-      </Snackbar>
+        </Box>
     </Box>
   );
 };

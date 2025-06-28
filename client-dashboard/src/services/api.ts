@@ -228,8 +228,8 @@ export interface LogFilters {
   service?: string;
   host?: string;
   search?: string;
-  startDate?: string;
-  endDate?: string;
+  startTime?: string;
+  endTime?: string;
 }
 
 class ApiService {
