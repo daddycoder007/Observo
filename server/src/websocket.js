@@ -1,4 +1,5 @@
 import { WebSocketServer } from 'ws';
+import logger from './logger.js';
 
 let wss = null;
 const clients = new Set();
@@ -7,7 +8,7 @@ export function initializeWebSocket(server) {
   wss = new WebSocketServer({ server });
 
   wss.on('connection', (ws) => {
-    console.log('🔌 New WebSocket client connected');
+    logger.info('🔌 New WebSocket client connected');
     clients.add(ws);
 
     // Send initial connection message
@@ -18,17 +19,17 @@ export function initializeWebSocket(server) {
     }));
 
     ws.on('close', () => {
-      console.log('🔌 WebSocket client disconnected');
+      logger.info('🔌 WebSocket client disconnected');
       clients.delete(ws);
     });
 
     ws.on('error', (error) => {
-      console.error('WebSocket error:', error);
+      logger.error('WebSocket error:', error);
       clients.delete(ws);
     });
   });
 
-  console.log('✅ WebSocket server initialized');
+  logger.info('✅ WebSocket server initialized');
 }
 
 export function broadcastToClients(data) {
@@ -41,7 +42,7 @@ export function broadcastToClients(data) {
         client.send(message);
         sentCount++;
       } catch (error) {
-        console.error('Error sending to WebSocket client:', error);
+        logger.error('Error sending to WebSocket client:', error);
         clients.delete(client);
       }
     }

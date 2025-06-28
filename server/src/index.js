@@ -1,3 +1,4 @@
+import './logger.js';
 import express from 'express';
 import cors from 'cors';
 import helmet from 'helmet';
@@ -5,16 +6,20 @@ import morgan from 'morgan';
 import dotenv from 'dotenv';
 import { createServer } from 'http';
 import { connectToMongoDB } from './database/mongoClient.js';
+import { settingsService } from './database/settingsService.js';
 import { startKafkaConsumer } from './kafka/consumer.js';
 import { logRoutes } from './routes/logs.js';
+import { analyticsRoutes } from './routes/analytics.js';
+import { settingsRoutes } from './routes/settings.js';
 import { initializeWebSocket, getClientCount, closeWebSocket } from './websocket.js';
+import { startSystemCheckService } from './utils/systemCheckService.js';
 
 // Load environment variables
 dotenv.config();
 
 const app = express();
 const server = createServer(app);
-const PORT = process.env.PORT || 3001;
+const PORT = process.env.PORT || 8000;
 
 // Initialize WebSocket
 initializeWebSocket(server);
@@ -38,6 +43,8 @@ app.get('/health', (req, res) => {
 
 // API Routes
 app.use('/api/logs', logRoutes);
+app.use('/api/analytics', analyticsRoutes);
+app.use('/api/settings', settingsRoutes);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
@@ -59,6 +66,13 @@ async function startServer() {
     await connectToMongoDB();
     console.log('✅ Connected to MongoDB');
 
+    // Initialize settings service
+    await settingsService.initialize();
+    console.log('✅ Settings service initialized');
+
+    // Start system check service
+    await startSystemCheckService();
+
     // Start Kafka consumer
     await startKafkaConsumer();
     console.log('✅ Kafka consumer started');
@@ -68,6 +82,7 @@ async function startServer() {
       console.log(`🚀 Server running on port ${PORT}`);
       console.log(`📊 Health check: http://localhost:${PORT}/health`);
       console.log(`📝 Logs API: http://localhost:${PORT}/api/logs`);
+      console.log(`⚙️ Settings API: http://localhost:${PORT}/api/settings`);
       console.log(`🔌 WebSocket: ws://localhost:${PORT}/ws`);
     });
   } catch (error) {

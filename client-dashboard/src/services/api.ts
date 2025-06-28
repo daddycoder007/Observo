@@ -1,6 +1,6 @@
 import axios from 'axios';
 
-const API_BASE_URL = 'http://localhost:3000/api';
+const API_BASE_URL = 'http://localhost:8000/api';
 
 // Create axios instance with base configuration
 const apiClient = axios.create({
@@ -66,6 +66,161 @@ export interface LogStats {
   logsPerHour: Array<{ _id: { hour: number }; count: number }>;
 }
 
+// Analytics interfaces
+export interface AnalyticsOverview {
+  summary: {
+    totalLogs: number;
+    recentLogs: number;
+    errorRate: number;
+    averageLogsPerHour: string;
+  };
+  logsByLevel: Array<{ _id: string; count: number; percentage: string }>;
+  logsByService: Array<{ _id: string; count: number; errorCount: number; errorRate: string }>;
+  logsByHost: Array<{ _id: string; count: number }>;
+  hourlyTrends: Array<{
+    _id: { year: number; month: number; day: number; hour: number };
+    count: number;
+    errorCount: number;
+  }>;
+  timeRange: {
+    startDate?: string;
+    endDate?: string;
+  };
+}
+
+export interface PerformanceMetrics {
+  responseTimeStats: Array<{
+    _id: string;
+    avgResponseTime: number;
+    minResponseTime: number;
+    maxResponseTime: number;
+    p95ResponseTime: number;
+    count: number;
+  }>;
+  throughputStats: Array<{
+    _id: string;
+    avgThroughput: number;
+    maxThroughput: number;
+    minThroughput: number;
+  }>;
+  errorPatterns: Array<{
+    _id: string;
+    errorPattern: Array<{ hour: number; errorCount: number }>;
+    totalErrors: number;
+  }>;
+  timeRange: {
+    startDate?: string;
+    endDate?: string;
+  };
+}
+
+export interface TrendData {
+  trendsByLevel: Array<{
+    _id: { year: number; month: number; day: number; hour: number; minute?: number };
+    levels: Array<{ level: string; count: number }>;
+    totalCount: number;
+  }>;
+  trendsByService: Array<{
+    _id: { year: number; month: number; day: number; hour: number; minute?: number };
+    services: Array<{ service: string; count: number }>;
+    totalCount: number;
+  }>;
+  interval: string;
+  timeRange: {
+    startDate?: string;
+    endDate?: string;
+  };
+}
+
+export interface AnomalyData {
+  volumeAnomalies: Array<{
+    _id: { year: number; month: number; day: number; hour: number };
+    count: number;
+    errorCount: number;
+    timestamp: string;
+    deviation: string;
+    severity: 'high' | 'medium';
+  }>;
+  errorRateAnomalies: Array<{
+    _id: { year: number; month: number; day: number; hour: number };
+    count: number;
+    errorCount: number;
+    errorRate: number;
+    timestamp: string;
+    deviation: string;
+    severity: 'high' | 'medium';
+  }>;
+  statistics: {
+    mean: number;
+    stdDev: number;
+    threshold: number;
+    errorRateMean: number;
+    errorRateStdDev: number;
+    errorRateThreshold: number;
+  };
+  timeRange: {
+    startDate?: string;
+    endDate?: string;
+  };
+}
+
+// Settings interfaces
+export interface DashboardSettings {
+  refreshInterval: number;
+  defaultTimeRange: string;
+  widgets: Array<{ id: string; enabled: boolean; position: number }>;
+}
+
+export interface AlertSettings {
+  errorRateThreshold: number;
+  logVolumeThreshold: number;
+  enabled: boolean;
+  notifications: {
+    email: boolean;
+    emails: string[];
+    webhook: boolean;
+    webhookUrl: string;
+    slack: boolean;
+    slackWebhookUrl: string;
+  };
+}
+
+export interface RetentionSettings {
+  enabled: boolean;
+  days: number;
+  autoDelete: boolean;
+}
+
+export interface UserSettings {
+  theme: 'light' | 'dark';
+  timezone: string;
+  language: string;
+}
+
+export interface SystemInfo {
+  database: {
+    name: string;
+    collections: number;
+    dataSize: number;
+    storageSize: number;
+    indexes: number;
+    indexSize: number;
+  };
+  logs: {
+    total: number;
+    oldest?: string;
+    newest?: string;
+    uniqueServices: number;
+    uniqueHosts: number;
+  };
+  system: {
+    nodeVersion: string;
+    platform: string;
+    memory: NodeJS.MemoryUsage;
+    uptime: number;
+  };
+}
+
 export interface LogFilters {
   page?: number;
   limit?: number;
@@ -108,6 +263,132 @@ class ApiService {
   async getHosts(): Promise<string[]> {
     const response = await apiClient.get('/logs/hosts');
     return response.data;
+  }
+
+  // Analytics methods
+  async getAnalyticsOverview(filters: { startDate?: string; endDate?: string; service?: string; host?: string } = {}): Promise<AnalyticsOverview> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+
+    const response = await apiClient.get(`/analytics/overview?${params.toString()}`);
+    return response.data;
+  }
+
+  async getPerformanceMetrics(filters: { startDate?: string; endDate?: string; service?: string } = {}): Promise<PerformanceMetrics> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+
+    const response = await apiClient.get(`/analytics/performance?${params.toString()}`);
+    return response.data;
+  }
+
+  async getTrends(filters: { startDate?: string; endDate?: string; interval?: string } = {}): Promise<TrendData> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+
+    const response = await apiClient.get(`/analytics/trends?${params.toString()}`);
+    return response.data;
+  }
+
+  async getAnomalies(filters: { startDate?: string; endDate?: string; threshold?: number } = {}): Promise<AnomalyData> {
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== '') {
+        params.append(key, value.toString());
+      }
+    });
+
+    const response = await apiClient.get(`/analytics/anomalies?${params.toString()}`);
+    return response.data;
+  }
+
+  // Settings methods
+  async getSettings(): Promise<{
+    dashboard: DashboardSettings;
+    alerts: AlertSettings;
+    dataRetention: RetentionSettings;
+    api: { rateLimit: number; maxResults: number };
+    user: UserSettings;
+  }> {
+    const response = await apiClient.get('/settings');
+    return response.data;
+  }
+
+  async updateSettings(settings: any): Promise<{ message: string; settings: any }> {
+    const response = await apiClient.put('/settings', settings);
+    return response.data;
+  }
+
+  async getDashboardSettings(): Promise<DashboardSettings> {
+    const response = await apiClient.get('/settings/dashboard');
+    return response.data;
+  }
+
+  async updateDashboardSettings(settings: Partial<DashboardSettings>): Promise<{ message: string; dashboard: DashboardSettings }> {
+    const response = await apiClient.put('/settings/dashboard', settings);
+    return response.data;
+  }
+
+  async getAlertSettings(): Promise<AlertSettings> {
+    const response = await apiClient.get('/settings/alerts');
+    return response.data;
+  }
+
+  async updateAlertSettings(settings: Partial<AlertSettings>): Promise<{ message: string; alerts: AlertSettings }> {
+    const response = await apiClient.put('/settings/alerts', settings);
+    return response.data;
+  }
+
+  async getRetentionSettings(): Promise<RetentionSettings> {
+    const response = await apiClient.get('/settings/retention');
+    return response.data;
+  }
+
+  async updateRetentionSettings(settings: Partial<RetentionSettings>): Promise<{ message: string; retention: RetentionSettings }> {
+    const response = await apiClient.put('/settings/retention', settings);
+    return response.data;
+  }
+
+  async triggerDataCleanup(): Promise<{ message: string; deletedCount: number; cutoffDate: string }> {
+    const response = await apiClient.post('/settings/retention/cleanup');
+    return response.data;
+  }
+
+  async getUserSettings(): Promise<UserSettings> {
+    const response = await apiClient.get('/settings/user');
+    return response.data;
+  }
+
+  async updateUserSettings(settings: Partial<UserSettings>): Promise<{ message: string; user: UserSettings }> {
+    const response = await apiClient.put('/settings/user', settings);
+    return response.data;
+  }
+
+  async getSystemInfo(): Promise<SystemInfo> {
+    const response = await apiClient.get('/settings/system');
+    return response.data;
+  }
+
+  async getSystemCheckSettings(): Promise<any> {
+    const res = await apiClient.get('/settings/system-check');
+    return res.data;
+  }
+
+  async updateSystemCheckSettings(settings: any): Promise<any> {
+    const res = await apiClient.put('/settings/system-check', settings);
+    return res.data;
   }
 }
 

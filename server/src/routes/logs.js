@@ -1,5 +1,6 @@
 import express from 'express';
 import { getCollection } from '../database/mongoClient.js';
+import logger from '../logger.js';
 
 const router = express.Router();
 
@@ -89,7 +90,7 @@ router.get('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching logs:', error);
+    logger.error('Error fetching logs:', error);
     res.status(500).json({ error: 'Failed to fetch logs' });
   }
 });
@@ -181,7 +182,7 @@ router.get('/stats', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error fetching log statistics:', error);
+    logger.error('Error fetching log statistics:', error);
     res.status(500).json({ error: 'Failed to fetch log statistics' });
   }
 });
@@ -201,7 +202,7 @@ router.get('/:id', async (req, res) => {
     res.json(log);
 
   } catch (error) {
-    console.error('Error fetching log:', error);
+    logger.error('Error fetching log:', error);
     res.status(500).json({ error: 'Failed to fetch log' });
   }
 });
@@ -245,8 +246,32 @@ router.delete('/', async (req, res) => {
     });
 
   } catch (error) {
-    console.error('Error deleting logs:', error);
+    logger.error('Error deleting logs:', error);
     res.status(500).json({ error: 'Failed to delete logs' });
+  }
+});
+
+// GET /api/logs/services - Get all available services
+router.get('/services', async (req, res) => {
+  try {
+    const collection = getCollection();
+    const services = await collection.distinct('service');
+    res.json(services);
+  } catch (error) {
+    logger.error('Error fetching services:', error);
+    res.status(500).json({ error: 'Failed to fetch services' });
+  }
+});
+
+// GET /api/logs/hosts - Get all available hosts
+router.get('/hosts', async (req, res) => {
+  try {
+    const collection = getCollection();
+    const hosts = await collection.distinct('metadata.host');
+    res.json(hosts);
+  } catch (error) {
+    logger.error('Error fetching hosts:', error);
+    res.status(500).json({ error: 'Failed to fetch hosts' });
   }
 });
 
