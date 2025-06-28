@@ -14,6 +14,8 @@ router.get('/', async (req, res) => {
       host,
       startDate,
       endDate,
+      startTime,
+      endTime,
       search,
       sortBy = 'timestamp',
       sortOrder = 'desc'
@@ -37,13 +39,15 @@ router.get('/', async (req, res) => {
       filter['metadata.host'] = { $regex: host, $options: 'i' };
     }
     
-    if (startDate || endDate) {
+    if (startDate || endDate || startTime || endTime) {
       filter.timestamp = {};
-      if (startDate) {
-        filter.timestamp.$gte = new Date(startDate);
+      const start = startDate || startTime;
+      const end = endDate || endTime;
+      if (start) {
+        filter.timestamp.$gte = new Date(start);
       }
-      if (endDate) {
-        filter.timestamp.$lte = new Date(endDate);
+      if (end) {
+        filter.timestamp.$lte = new Date(end);
       }
     }
     
@@ -84,6 +88,8 @@ router.get('/', async (req, res) => {
         host,
         startDate,
         endDate,
+        startTime,
+        endTime,
         search
       }
     });
