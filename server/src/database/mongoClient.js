@@ -1,4 +1,5 @@
 import { MongoClient } from 'mongodb';
+import logger from '../logger.js';
 
 let client = null;
 let db = null;
@@ -17,17 +18,17 @@ export async function connectToMongoDB() {
     if (username && password) {
       // If URI already contains authentication, use it as is
       if (uri.includes('@')) {
-        console.log('Using provided MongoDB URI with authentication');
+        logger.info('Using provided MongoDB URI with authentication');
       } else {
         // Add authentication to URI
         const protocol = uri.startsWith('mongodb://') ? 'mongodb://' : 'mongodb+srv://';
         const hostPart = uri.replace(protocol, '');
         uri = `${protocol}${username}:${password}@${hostPart}`;
-        console.log('Added authentication to MongoDB URI');
+        logger.info('Added authentication to MongoDB URI');
       }
     } else {
       // For local development without authentication
-      console.log('Connecting to MongoDB without authentication');
+      logger.info('Connecting to MongoDB without authentication');
     }
 
     // Create MongoDB client
@@ -48,11 +49,11 @@ export async function connectToMongoDB() {
     // Create indexes for better query performance
     await createIndexes();
 
-    console.log(`Connected to MongoDB: ${databaseName}.${collectionName}`);
+    logger.info(`Connected to MongoDB: ${databaseName}.${collectionName}`);
     
     return { client, db, collection };
   } catch (error) {
-    console.error('Failed to connect to MongoDB:', error);
+    logger.error('Failed to connect to MongoDB:', error);
     throw error;
   }
 }
@@ -65,9 +66,9 @@ async function createIndexes() {
     await collection.createIndex({ service: 1 });
     await collection.createIndex({ "metadata.host": 1 });
     
-    console.log('✅ MongoDB indexes created successfully');
+    logger.info('✅ MongoDB indexes created successfully');
   } catch (error) {
-    console.warn('⚠️ Failed to create indexes:', error.message);
+    logger.warn('⚠️ Failed to create indexes:', error.message);
   }
 }
 
@@ -88,7 +89,7 @@ export function getDatabase() {
 export async function closeMongoConnection() {
   if (client) {
     await client.close();
-    console.log('MongoDB connection closed');
+    logger.info('MongoDB connection closed');
   }
 }
 

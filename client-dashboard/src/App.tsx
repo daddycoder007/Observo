@@ -5,6 +5,8 @@ import CssBaseline from '@mui/material/CssBaseline';
 import { Box } from '@mui/material';
 import Dashboard from './components/Dashboard';
 import LogsViewer from './components/LogsViewer';
+import Analytics from './components/Analytics';
+import Settings from './components/Settings';
 import Sidebar from './components/Sidebar';
 
 // Create dark theme
@@ -92,6 +94,8 @@ function App() {
             <Routes>
               <Route path="/" element={<Dashboard />} />
               <Route path="/logs" element={<LogsViewer />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/settings" element={<Settings />} />
             </Routes>
           </Box>
         </Box>

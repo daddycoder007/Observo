@@ -1,6 +1,8 @@
 import { Kafka } from 'kafkajs';
 import { getCollection } from '../database/mongoClient.js';
 import { broadcastToClients, getClientCount } from '../websocket.js';
+import { sendEmailNotification, sendSlackNotification } from '../utils/alertNotifications.js';
+import logger from '../logger.js';
 
 let consumer = null;
 let isRunning = false;
@@ -29,7 +31,6 @@ export async function startKafkaConsumer() {
     // Subscribe to all specified topics
     for (const topic of topics) {
       await consumer.subscribe({ topic, fromBeginning: false });
-      console.log(`📥 Subscribed to Kafka topic: ${topic}`);
     }
 
     await consumer.run({
@@ -37,7 +38,7 @@ export async function startKafkaConsumer() {
         try {
           await processLogMessage(message, topic);
         } catch (error) {
-          console.error('Error processing message:', error);
+          logger.error('Error processing message:', error);
           // Continue processing other messages even if one fails
         }
       },
@@ -47,11 +48,9 @@ export async function startKafkaConsumer() {
     });
 
     isRunning = true;
-    console.log('✅ Kafka consumer started successfully');
-    console.log(`📊 Monitoring topics: ${topics.join(', ')}`);
 
   } catch (error) {
-    console.error('❌ Failed to start Kafka consumer:', error);
+    logger.error('❌ Failed to start Kafka consumer:', error);
     throw error;
   }
 }
@@ -86,13 +85,10 @@ async function processLogMessage(message, topic) {
       raw: logData // Keep original data for reference
     };
 
-    console.log('logEntry from kafka consumer ========>>>>>>>>>>', logEntry);
 
     // Insert log into MongoDB
     const result = await collection.insertOne(logEntry);
-    
-    console.log(`📝 Log stored in MongoDB: ${result.insertedId} (${tag})`);
-    
+        
     // Broadcast new log to WebSocket clients
     try {
       const sentCount = broadcastToClients({
@@ -103,14 +99,63 @@ async function processLogMessage(message, topic) {
         },
         timestamp: new Date().toISOString()
       });
-      console.log(`🔌 Broadcasted new log to ${sentCount} WebSocket clients`);
     } catch (wsError) {
-      console.error('Error broadcasting to WebSocket clients:', wsError);
+      logger.error('Error broadcasting to WebSocket clients:', wsError);
+    }
+
+    // ALERT LOGIC PLACEHOLDER: Check thresholds and trigger alerts (webhook, email, Slack)
+    try {
+      // Fetch alert settings
+      const { settingsService } = await import('../database/settingsService.js');
+      const alertSettings = await settingsService.getSection('alerts');
+      if (alertSettings?.enabled && alertSettings.notifications) {
+        // Example: Check if this log is an error and if errorRateThreshold is exceeded
+        // (For demo, just trigger on every error log)
+        if (logEntry.level === 'error' && alertSettings.notifications) {
+          const subject = 'Observo Alert: Error Log Detected';
+          const text = `An error log was detected: ${logEntry.message}`;
+          const html = `<b>An error log was detected:</b><br>${logEntry.message}`;
+          // Email
+          if (alertSettings.notifications.email && alertSettings.notifications.emails?.length) {
+            await sendEmailNotification({
+              emails: alertSettings.notifications.emails,
+              subject,
+              text,
+              html
+            });
+          }
+          // Slack
+          if (alertSettings.notifications.slack && alertSettings.notifications.slackWebhookUrl) {
+            await sendSlackNotification({
+              webhookUrl: alertSettings.notifications.slackWebhookUrl,
+              message: text
+            });
+          }
+          // Webhook (generic)
+          if (alertSettings.notifications.webhook && alertSettings.notifications.webhookUrl) {
+            try {
+              await fetch(alertSettings.notifications.webhookUrl, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  type: 'alert',
+                  log: logEntry,
+                  message: text
+                })
+              });
+            } catch (err) {
+              logger.error('❌ Failed to send webhook alert:', err);
+            }
+          }
+        }
+      }
+    } catch (alertError) {
+      logger.error('❌ Error in alert logic:', alertError);
     }
     
     return result;
   } catch (error) {
-    console.error('Error processing log message:', error);
+    logger.error('Error processing log message:', error);
     throw error;
   }
 }
@@ -136,9 +181,8 @@ export async function stopKafkaConsumer() {
     try {
       await consumer.disconnect();
       isRunning = false;
-      console.log('✅ Kafka consumer stopped');
     } catch (error) {
-      console.error('Error stopping Kafka consumer:', error);
+      logger.error('Error stopping Kafka consumer:', error);
     }
   }
 }
