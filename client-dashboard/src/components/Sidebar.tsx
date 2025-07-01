@@ -17,6 +17,7 @@ import {
 import {
   Dashboard as DashboardIcon,
   ReceiptLong as LogsIcon,
+  Settings as SettingsIcon,
   ChevronLeft,
   ChevronRight,
   QueryStats,
@@ -72,6 +73,9 @@ const Drawer = styled(MuiDrawer, { shouldForwardProp: (prop) => prop !== 'open' 
 const menuItems = [
   { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
   { text: 'Logs', icon: <LogsIcon />, path: '/logs' },
+  { text: 'Analytics', icon: <QueryStats />, path: '/analytics' },
+  { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
+
 ];
 
 interface SidebarProps {

@@ -1,8 +1,8 @@
-server_id: "my-server-1"
+server_id: "my-node-server-1"
 kafka:
   brokers:
     - "localhost:9092"
   topic_prefix: "testing-logs"
 log_files:
-  - path: ./logs/output.log
+  - path: /Users/apple/Documents/Observo/server/logs/output.log
     tag: "output"

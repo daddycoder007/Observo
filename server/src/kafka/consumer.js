@@ -6,23 +6,33 @@ import logger from '../logger.js';
 
 let consumer = null;
 let isRunning = false;
-
-const kafka = new Kafka({
-  clientId: process.env.KAFKA_CLIENT_ID || 'observo-log-service',
-  brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
-  retry: {
-    initialRetryTime: 100,
-    retries: 8
-  }
-});
+let kafka = null;
 
 export async function startKafkaConsumer() {
   try {
+    // Create Kafka instance here after environment variables are loaded
+    kafka = new Kafka({
+      clientId: process.env.KAFKA_CLIENT_ID || 'observo-log-service',
+      brokers: (process.env.KAFKA_BROKERS || 'localhost:9092').split(','),
+      retry: {
+        initialRetryTime: 100,
+        retries: 8
+      }
+    });
+
     const topicPrefix = process.env.KAFKA_TOPIC_PREFIX || 'testing-logs';
     const topics = process.env.KAFKA_TOPICS 
       ? process.env.KAFKA_TOPICS.split(',') 
       : [`${topicPrefix}.output`]; // Default to output topic
     const groupId = process.env.KAFKA_GROUP_ID || 'observo-log-consumer-group';
+
+    // Log the configuration for debugging
+    logger.info(`🔧 Kafka Configuration:`, {
+      brokers: process.env.KAFKA_BROKERS || 'localhost:9092',
+      clientId: process.env.KAFKA_CLIENT_ID || 'observo-log-service',
+      groupId: groupId,
+      topics: topics
+    });
 
     consumer = kafka.consumer({ groupId });
 
@@ -48,6 +58,7 @@ export async function startKafkaConsumer() {
     });
 
     isRunning = true;
+    logger.info('✅ Kafka consumer started successfully');
 
   } catch (error) {
     logger.error('❌ Failed to start Kafka consumer:', error);

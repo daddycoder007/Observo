@@ -19,7 +19,7 @@ dotenv.config();
 
 const app = express();
 const server = createServer(app);
-const PORT = process.env.PORT || 8000;
+const PORT = process.env.PORT || 3000;
 
 // Initialize WebSocket
 initializeWebSocket(server);
