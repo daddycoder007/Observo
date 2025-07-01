@@ -52,7 +52,7 @@ services:
       - observo-network
 
   server:
-    image: observo/server:test
+    image: daddycoder007/observo-server:latest
     container_name: observo-server
     restart: unless-stopped
     ports:
@@ -70,7 +70,7 @@ services:
       - ./server/logs:/logs
 
   dashboard:
-    image: observo/dashboard:test
+    image: daddycoder007/observo-dashboard:latest
     container_name: observo-dashboard
     restart: unless-stopped
     ports:

@@ -108,8 +108,8 @@ KAFKA_TOPICS=observo-logs.output,observo-logs.error,observo-logs.access
 
 All images are automatically published to Docker Hub:
 
-- **observo/server**: `docker pull observo/server:latest`
-- **observo/dashboard**: `docker pull observo/dashboard:latest`
+- **daddycoder007/observo-server**: `docker pull daddycoder007/observo-server:latest`
+- **daddycoder007/observo-dashboard**: `docker pull daddycoder007/observo-dashboard:latest`
 
 ### Available Tags
 - `latest` - Latest stable version

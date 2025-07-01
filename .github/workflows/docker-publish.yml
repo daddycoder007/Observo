@@ -9,8 +9,8 @@ on:
 
 env:
   REGISTRY: docker.io
-  IMAGE_NAME_SERVER: observo/server
-  IMAGE_NAME_DASHBOARD: observo/dashboard
+  IMAGE_NAME_SERVER: daddycoder007/observo-server
+  IMAGE_NAME_DASHBOARD: daddycoder007/observo-dashboard
 
 jobs:
   build-and-push:
