@@ -52,7 +52,8 @@ services:
       - observo-network
 
   server:
-    image: daddycoder007/observo-server:latest
+    image: daddycoder007/observo-server:main
+    platform: linux/amd64
     container_name: observo-server
     restart: unless-stopped
     ports:
@@ -70,7 +71,8 @@ services:
       - ./server/logs:/logs
 
   dashboard:
-    image: daddycoder007/observo-dashboard:latest
+    image: daddycoder007/observo-dashboard:main
+    platform: linux/amd64
     container_name: observo-dashboard
     restart: unless-stopped
     ports:
