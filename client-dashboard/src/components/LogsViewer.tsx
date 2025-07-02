@@ -17,6 +17,7 @@ import {
   Tooltip,
   Collapse,
   Divider,
+  useTheme,
 } from '@mui/material';
 import {
   Search,
@@ -26,6 +27,12 @@ import {
   Info,
   BugReport,
   ExpandMore,
+  AccessTime,
+  Computer,
+  Label,
+  Storage,
+  Code,
+  ContentCopy,
 } from '@mui/icons-material';
 import { format, parseISO } from 'date-fns';
 import { apiService, LogEntry, LogsResponse, wsService } from '../services/api';
@@ -57,12 +64,13 @@ const LogLevelChip = ({ level }: { level: string }) => {
 
 const LogEntryItem = ({ log }: { log: LogEntry }) => {
   const [expanded, setExpanded] = useState(false);
+  const theme = useTheme();
 
   return (
     <Paper variant="outlined" sx={{ mb: 1, p: 1.5, '&:hover': { borderColor: 'primary.main' } }} >
         <Box display="flex" alignItems="center" gap={2} onClick={() => setExpanded(!expanded)} sx={{cursor: 'pointer'}}>
             <Box sx={{ width: { xs: '100%', sm: '20%' } }}>
-                <Typography variant="body2" color="text.secondary" sx={{fontSize: '18px'}}>{format(parseISO(log.timestamp), 'MMM dd, HH:mm:ss.SSS')}</Typography>
+                <Typography variant="body2" color="text.secondary" sx={{fontSize: '18px'}}>{format(new Date(log.timestamp), 'MMM dd, h:mm:ss a')}</Typography>
             </Box>
             <Box>
                 <LogLevelChip level={log.level} />
@@ -100,10 +108,190 @@ const LogEntryItem = ({ log }: { log: LogEntry }) => {
         <Collapse in={expanded}>
             <Divider sx={{ my: 1.5 }}/>
             <Box sx={{ p: 2, backgroundColor: 'background.default', borderRadius: 1 }}>
-                <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold' }}>Full Log Details</Typography>
-                <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-all', color: '#E0E0E0', fontFamily: "'Fira Code', 'Menlo', 'monospace'" }}>
-                    {JSON.stringify(log, null, 2)}
-                </pre>
+                <Typography variant="subtitle2" sx={{ mb: 2, fontWeight: 'bold' }}>Log Details</Typography>
+                
+                {/* Key Information Grid */}
+                <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', md: '1fr 1fr' }, gap: 2, mb: 3 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <AccessTime sx={{ fontSize: 20, color: 'primary.main' }} />
+                        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80, fontSize: '1rem', fontWeight: 500 }}>Timestamp:</Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '1rem', color: 'text.primary', fontWeight: 500 }}>
+                            {format(new Date(log.timestamp), 'MMM dd, yyyy at h:mm:ss a')}
+                        </Typography>
+                    </Box>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Computer sx={{ fontSize: 20, color: 'primary.main' }} />
+                        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80, fontSize: '1rem', fontWeight: 500 }}>Host:</Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '1rem', color: 'text.primary', fontWeight: 500 }}>
+                            {log.metadata?.host || 'N/A'}
+                        </Typography>
+                    </Box>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Label sx={{ fontSize: 20, color: 'primary.main' }} />
+                        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80, fontSize: '1rem', fontWeight: 500 }}>Tag:</Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '1rem', color: 'text.primary', fontWeight: 500 }}>
+                            {log.tag || 'N/A'}
+                        </Typography>
+                    </Box>
+                    
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                        <Storage sx={{ fontSize: 20, color: 'primary.main' }} />
+                        <Typography variant="body2" color="text.secondary" sx={{ minWidth: 80, fontSize: '1rem', fontWeight: 500 }}>Topic:</Typography>
+                        <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '1rem', color: 'text.primary', fontWeight: 500 }}>
+                            {log.kafkaMetadata?.topic || 'N/A'}
+                        </Typography>
+                    </Box>
+                </Box>
+
+                {/* Message Section */}
+                <Box sx={{ mb: 3 }}>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, fontSize: '1.1rem' }}>
+                        <Code sx={{ fontSize: 20, color: 'primary.main' }} />
+                        Message
+                    </Typography>
+                    <Paper 
+                        variant="outlined" 
+                        sx={{ 
+                            p: 2, 
+                            backgroundColor: 'action.hover',
+                            position: 'relative',
+                            '&:hover .copy-button': { opacity: 1 }
+                        }}
+                    >
+                        <Typography 
+                            variant="body2" 
+                            sx={{ 
+                                fontFamily: "'Fira Code', 'Menlo', 'monospace'",
+                                whiteSpace: 'pre-wrap',
+                                wordBreak: 'break-word',
+                                lineHeight: 1.5,
+                                fontSize: '1rem',
+                                color: 'text.primary',
+                                fontWeight: 400
+                            }}
+                        >
+                            {log.message}
+                        </Typography>
+                        <IconButton
+                            className="copy-button"
+                            size="small"
+                            sx={{ 
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                opacity: 0,
+                                transition: 'opacity 0.2s',
+                                color: 'text.secondary',
+                                '&:hover': { color: 'primary.main' }
+                            }}
+                            onClick={() => navigator.clipboard.writeText(log.message)}
+                        >
+                            <ContentCopy sx={{ fontSize: 18 }} />
+                        </IconButton>
+                    </Paper>
+                </Box>
+
+                {/* Kafka Metadata */}
+                {log.kafkaMetadata && (
+                    <Box sx={{ mb: 3 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.9rem' }}>
+                            Kafka Metadata
+                        </Typography>
+                        <Box sx={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 1 }}>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>Partition:</Typography>
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.875rem', color: 'text.primary', fontWeight: 500 }}>
+                                    {log.kafkaMetadata.partition ?? 'N/A'}
+                                </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>Offset:</Typography>
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.875rem', color: 'text.primary', fontWeight: 500 }}>
+                                    {log.kafkaMetadata.offset}
+                                </Typography>
+                            </Box>
+                            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontSize: '0.875rem', fontWeight: 500 }}>Received:</Typography>
+                                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.875rem', color: 'text.primary', fontWeight: 500 }}>
+                                    {format(parseISO(log.kafkaMetadata.receivedAt), 'HH:mm:ss.SSS')}
+                                </Typography>
+                            </Box>
+                        </Box>
+                    </Box>
+                )}
+
+                {/* Additional Metadata */}
+                {log.metadata && Object.keys(log.metadata).length > 1 && (
+                    <Box sx={{ mb: 3 }}>
+                        <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', fontSize: '0.9rem' }}>
+                            Additional Metadata
+                        </Typography>
+                        <Paper variant="outlined" sx={{ p: 2, backgroundColor: 'action.hover' }}>
+                            {Object.entries(log.metadata).map(([key, value]) => {
+                                if (key === 'host') return null; // Already shown above
+                                return (
+                                    <Box key={key} sx={{ display: 'flex', justifyContent: 'space-between', mb: 0.5 }}>
+                                        <Typography variant="body2" color="text.secondary" sx={{ textTransform: 'capitalize', fontSize: '0.875rem', fontWeight: 500 }}>
+                                            {key}:
+                                        </Typography>
+                                        <Typography variant="body2" sx={{ fontFamily: 'monospace', textAlign: 'right', fontSize: '0.875rem', color: 'text.primary', fontWeight: 500 }}>
+                                            {typeof value === 'object' ? JSON.stringify(value) : String(value)}
+                                        </Typography>
+                                    </Box>
+                                );
+                            })}
+                        </Paper>
+                    </Box>
+                )}
+
+                {/* Raw Data Section (Collapsible) */}
+                <Box>
+                    <Typography variant="subtitle2" sx={{ mb: 1, fontWeight: 'bold', cursor: 'pointer', fontSize: '0.9rem' }}>
+                        Raw JSON Data
+                    </Typography>
+                    <Paper 
+                        variant="outlined" 
+                        sx={{ 
+                            p: 2, 
+                            backgroundColor: 'action.hover',
+                            position: 'relative',
+                            '&:hover .copy-button-raw': { opacity: 1 }
+                        }}
+                    >
+                        <pre style={{ 
+                            margin: 0, 
+                            whiteSpace: 'pre-wrap', 
+                            wordBreak: 'break-all', 
+                            color: theme.palette.text.primary, 
+                            fontFamily: "'Fira Code', 'Menlo', 'monospace'",
+                            fontSize: '0.875rem',
+                            lineHeight: 1.4,
+                            maxHeight: '200px',
+                            overflow: 'auto',
+                            fontWeight: 400
+                        }}>
+                            {JSON.stringify(log, null, 2)}
+                        </pre>
+                        <IconButton
+                            className="copy-button-raw"
+                            size="small"
+                            sx={{ 
+                                position: 'absolute',
+                                top: 8,
+                                right: 8,
+                                opacity: 0,
+                                transition: 'opacity 0.2s',
+                                color: 'text.secondary',
+                                '&:hover': { color: 'primary.main' }
+                            }}
+                            onClick={() => navigator.clipboard.writeText(JSON.stringify(log, null, 2))}
+                        >
+                            <ContentCopy sx={{ fontSize: 16 }} />
+                        </IconButton>
+                    </Paper>
+                </Box>
             </Box>
         </Collapse>
     </Paper>
